@@ -542,6 +542,49 @@ label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5
 </head>
 <body>
 
+<!-- PASSWORD GATE -->
+<div id="password-gate" style="display:none;position:fixed;inset:0;background:#0a0b0f;z-index:99999;display:flex;align-items:center;justify-content:center">
+  <div style="background:#111318;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:40px;width:360px;text-align:center">
+    <div style="width:48px;height:48px;background:linear-gradient(135deg,#4f7cff,#6c3cff);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:white;margin:0 auto 20px;font-family:Nunito,sans-serif">C</div>
+    <div style="font-family:Nunito,sans-serif;font-size:20px;font-weight:800;color:#eceef2;margin-bottom:6px">Charter OS</div>
+    <div style="font-size:13px;color:#8a90a0;margin-bottom:28px">Enter password to continue</div>
+    <input type="password" id="pw-input" placeholder="Password"
+      style="width:100%;background:#181b22;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:11px 14px;font-size:14px;color:#eceef2;outline:none;margin-bottom:12px;font-family:DM Sans,sans-serif;text-align:center"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <div id="pw-error" style="color:#ff5c5c;font-size:12px;margin-bottom:10px;display:none">Incorrect password. Try again.</div>
+    <button onclick="checkPassword()"
+      style="width:100%;background:#4f7cff;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:DM Sans,sans-serif">
+      Enter →
+    </button>
+    <div style="margin-top:16px;font-size:11px;color:#555d70">Contact your Product Office admin for access</div>
+  </div>
+</div>
+
+<script>
+  // Password gate — change PASSWORD below to your chosen password
+  const APP_PASSWORD = 'hdb2026';
+  const SESSION_KEY = 'charter_os_auth';
+
+  function checkPassword() {
+    const input = document.getElementById('pw-input').value;
+    if (input === APP_PASSWORD) {
+      sessionStorage.setItem(SESSION_KEY, 'true');
+      document.getElementById('password-gate').style.display = 'none';
+    } else {
+      document.getElementById('pw-error').style.display = 'block';
+      document.getElementById('pw-input').value = '';
+      document.getElementById('pw-input').focus();
+    }
+  }
+
+  // Check auth on load
+  if (sessionStorage.getItem(SESSION_KEY) !== 'true') {
+    document.getElementById('password-gate').style.display = 'flex';
+  } else {
+    document.getElementById('password-gate').style.display = 'none';
+  }
+</script>
+
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="sidebar-logo">
@@ -1868,7 +1911,7 @@ function removeFile(section, idx) {
 // AI GENERATION
 // ═══════════════════════════════════════
 // API endpoint — proxy server handles CORS and injects the API key
-const API_ENDPOINT = '/api/claude';
+const API_ENDPOINT = 'http://localhost:3131/api/claude';
 
 async function callClaude(prompt, systemPrompt) {
   try {
@@ -3278,7 +3321,7 @@ async function generateSummarySlides() {
 
     // Send charter state + chart images to server
     const payload = { ...S, chartImages };
-    const resp = await fetch('/api/generate-slides', {
+    const resp = await fetch('http://localhost:3131/api/generate-slides', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
