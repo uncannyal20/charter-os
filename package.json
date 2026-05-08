@@ -1,0 +1,11 @@
+{
+  "name": "charter-os",
+  "version": "1.0.0",
+  "description": "Charter OS — Product Charter Intelligence Platform",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
