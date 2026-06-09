@@ -553,6 +553,13 @@ label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5
       style="width:100%;background:#181b22;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:11px 14px;font-size:14px;color:#eceef2;outline:none;margin-bottom:12px;font-family:DM Sans,sans-serif;text-align:center"
       onkeydown="if(event.key==='Enter')checkPassword()">
     <div id="pw-error" style="color:#ff5c5c;font-size:12px;margin-bottom:10px;display:none">Incorrect password. Try again.</div>
+    <div style="border-top:1px solid rgba(255,255,255,0.07);margin:4px 0 16px;padding-top:16px">
+      <div style="font-size:11px;color:#8a90a0;margin-bottom:8px;text-align:left">Anthropic API Key (required for AI features)</div>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..."
+        style="width:100%;background:#181b22;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:11px 14px;font-size:13px;color:#eceef2;outline:none;margin-bottom:6px;font-family:DM Sans,sans-serif"
+        onkeydown="if(event.key==='Enter')checkPassword()">
+      <div style="font-size:10px;color:#555d70;text-align:left">Key is stored in your browser only — never sent anywhere except Anthropic.</div>
+    </div>
     <button onclick="checkPassword()"
       style="width:100%;background:#4f7cff;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:DM Sans,sans-serif">
       Enter →
@@ -565,11 +572,27 @@ label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5
   // Password gate — change PASSWORD below to your chosen password
   const APP_PASSWORD = 'hdb2026';
   const SESSION_KEY = 'charter_os_auth';
+  const API_KEY_STORAGE = 'charter_os_api_key';
+
+  // Restore saved API key into input if present
+  const _savedKey = localStorage.getItem(API_KEY_STORAGE);
+  if (_savedKey) {
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('api-key-input');
+      if (el) el.value = _savedKey;
+    });
+    window.ANTHROPIC_API_KEY = _savedKey;
+  }
 
   function checkPassword() {
     const input = document.getElementById('pw-input').value;
+    const apiKey = document.getElementById('api-key-input').value.trim();
     if (input === APP_PASSWORD) {
       sessionStorage.setItem(SESSION_KEY, 'true');
+      if (apiKey) {
+        localStorage.setItem(API_KEY_STORAGE, apiKey);
+        window.ANTHROPIC_API_KEY = apiKey;
+      }
       document.getElementById('password-gate').style.display = 'none';
     } else {
       document.getElementById('pw-error').style.display = 'block';
@@ -581,8 +604,18 @@ label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5
   // Check auth on load
   if (sessionStorage.getItem(SESSION_KEY) !== 'true') {
     document.getElementById('password-gate').style.display = 'flex';
+    // Pre-fill API key if saved
+    const savedKey = localStorage.getItem(API_KEY_STORAGE);
+    if (savedKey) {
+      window.ANTHROPIC_API_KEY = savedKey;
+      const keyEl = document.getElementById('api-key-input');
+      if (keyEl) keyEl.value = savedKey;
+    }
   } else {
     document.getElementById('password-gate').style.display = 'none';
+    // Restore API key from storage even if already authenticated
+    const savedKey = localStorage.getItem(API_KEY_STORAGE);
+    if (savedKey) window.ANTHROPIC_API_KEY = savedKey;
   }
 </script>
 
@@ -1911,14 +1944,19 @@ function removeFile(section, idx) {
 // ═══════════════════════════════════════
 // AI GENERATION
 // ═══════════════════════════════════════
-// API endpoint — proxy server handles CORS and injects the API key
-const API_ENDPOINT = 'http://localhost:3131/api/claude';
+// Direct Anthropic API — no proxy server required
+const API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
 async function callClaude(prompt, systemPrompt) {
   try {
     const resp = await fetch(API_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': window.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 3000,
@@ -1929,14 +1967,15 @@ async function callClaude(prompt, systemPrompt) {
     if (!resp.ok) {
       let errMsg = `HTTP ${resp.status}`;
       try { const e = await resp.json(); errMsg = e.error?.message || errMsg; } catch(_) {}
+      if (resp.status === 401) throw new Error('Invalid API key. Please check your Anthropic API key.');
       throw new Error(errMsg);
     }
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message);
     return data.content.map(b => b.text || '').join('');
   } catch(e) {
-    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('ECONNREFUSED')) {
-      throw new Error('Cannot reach the proxy server. Make sure server.js is running: node server.js');
+    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('Load failed')) {
+      throw new Error('Network error — check your internet connection and that your API key is set.');
     }
     throw new Error('AI generation failed: ' + e.message);
   }
